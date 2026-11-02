@@ -23,6 +23,15 @@ import socket
 #Store whether we are on Windows once for the whole module to reuse.
 IS_WINDOWS = platform.system() == "Windows"
 
+#Windows-only fix for a real bug report: this module shells out to real
+#console commands (netsh advfirewall) for Shield actions - without this,
+#each one briefly flashes a console window open and closed. See
+#modules/users.py's own copy of this exact fix for the full explanation;
+#the short version is CREATE_NO_WINDOW tells Windows not to allocate a
+#console for the child process at all, and the ternary keeps this safe
+#to import on Linux too.
+_HIDE_CONSOLE_KWARGS = {"creationflags": subprocess.CREATE_NO_WINDOW} if IS_WINDOWS else {}
+
 
 #Define run_command as the same small wrapper pattern used across every
 #other module, so every OS command call in this project behaves the same.
@@ -30,7 +39,9 @@ def run_command(command):
     #Try to run the command and capture its output.
     try:
         #Give the command 10 seconds before giving up on it.
-        result = subprocess.run(command, capture_output=True, text=True, timeout=10)
+        #**_HIDE_CONSOLE_KWARGS suppresses the flashing console window
+        #this would otherwise pop open on Windows.
+        result = subprocess.run(command, capture_output=True, text=True, timeout=10, **_HIDE_CONSOLE_KWARGS)
         #Return the combined stdout text.
         return result.stdout
     #If the command fails or is missing, do not crash the whole tool.

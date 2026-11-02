@@ -68,6 +68,15 @@ import datetime
 #Store whether we are on Windows once for the whole module to reuse.
 IS_WINDOWS = platform.system() == "Windows"
 
+#Windows-only fix for a real bug report: this module shells out to real
+#console commands (wmic, vssadmin, etc.) for Medium's snapshot/revert
+#actions - without this, each one briefly flashes a console window open
+#and closed. See modules/users.py's own copy of this exact fix for the
+#full explanation; the short version is CREATE_NO_WINDOW tells Windows
+#not to allocate a console for the child process at all, and the ternary
+#keeps this safe to import on Linux too.
+_HIDE_CONSOLE_KWARGS = {"creationflags": subprocess.CREATE_NO_WINDOW} if IS_WINDOWS else {}
+
 
 #Define run_command, the same small wrapper pattern used in every other
 #module, kept local so this module has no outside dependency beyond the
@@ -77,7 +86,9 @@ def run_command(command):
     #text, since snapshot failures are common and we want to show why.
     try:
         #Give the command up to 60 seconds; snapshots can take a while.
-        result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+        #**_HIDE_CONSOLE_KWARGS suppresses the flashing console window
+        #this would otherwise pop open on Windows.
+        result = subprocess.run(command, capture_output=True, text=True, timeout=60, **_HIDE_CONSOLE_KWARGS)
         #Return both the output and whether it actually succeeded.
         return result.stdout + result.stderr, result.returncode == 0
     #If the command itself is missing or errors out before running, treat

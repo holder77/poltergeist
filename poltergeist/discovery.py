@@ -44,6 +44,16 @@ from . import role_profiles
 #point of --discover-json is that it runs wherever it is asked to.
 IS_WINDOWS = platform.system() == "Windows"
 
+#Windows-only fix for a real bug report: this module shells out to
+#several real console commands (ipconfig, netstat, etc. - whatever each
+#function below uses) every time the setup wizard probes this machine -
+#without this, each one briefly flashes a console window open and
+#closed. See modules/users.py's own copy of this exact fix for the full
+#explanation; the short version is CREATE_NO_WINDOW tells Windows not to
+#allocate a console for the child process at all, and the ternary keeps
+#this safe to import on Linux too.
+_HIDE_CONSOLE_KWARGS = {"creationflags": subprocess.CREATE_NO_WINDOW} if IS_WINDOWS else {}
+
 #Define a list of substrings that tend to show up in VPN or tunnel adapter
 #names, so the wizard can guess which interfaces are VPN-related.
 VPN_NAME_HINTS = ("tun", "tap", "wg", "ppp", "utun", "vpn", "wireguard", "openvpn", "zerotier", "tailscale")
@@ -55,8 +65,10 @@ def run_command(command):
     #Try to run the command and capture its text output.
     try:
         #Run the command, waiting at most 10 seconds so a hung command
-        #never freezes the whole discovery step.
-        result = subprocess.run(command, capture_output=True, text=True, timeout=10)
+        #never freezes the whole discovery step. **_HIDE_CONSOLE_KWARGS
+        #suppresses the flashing console window this would otherwise pop
+        #open on Windows (see that constant's own comment above).
+        result = subprocess.run(command, capture_output=True, text=True, timeout=10, **_HIDE_CONSOLE_KWARGS)
         #Return just the standard output text.
         return result.stdout
     #Catch anything that goes wrong (missing command, timeout, etc).

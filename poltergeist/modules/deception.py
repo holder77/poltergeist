@@ -54,6 +54,19 @@ import subprocess
 #Store whether we are on Windows once for the whole module to reuse.
 IS_WINDOWS = platform.system() == "Windows"
 
+#Windows-only fix for a real bug report: a console-subsystem command
+#launched via subprocess.run() from a windowed/GUI process (no console of
+#its own attached) makes Windows pop open a brand-new, briefly visible
+#console window for that one command, then close it the instant it
+#exits - and since the GUI's own ambient auto-scan re-runs every live
+#check on a timer, that adds up to a steady flicker of console windows
+#opening and closing. CREATE_NO_WINDOW tells Windows not to allocate one
+#at all. The ternary means subprocess.CREATE_NO_WINDOW (a Windows-only
+#attribute - it doesn't exist in the subprocess module on Linux) is only
+#ever actually read when IS_WINDOWS is True, so this stays safe to
+#import on Linux too.
+_HIDE_CONSOLE_KWARGS = {"creationflags": subprocess.CREATE_NO_WINDOW} if IS_WINDOWS else {}
+
 #Define MAX_CANARY_FOLDERS: the hard cap on how many real folders Canary
 #will seed with bait files at once, for ONE running instance - the exact
 #same reasoning, and the exact same number, as tripwire.py's own
@@ -115,7 +128,10 @@ def run_command(command):
     #Try to run the command and capture its output as text.
     try:
         #Give the command 10 seconds before giving up on it.
-        result = subprocess.run(command, capture_output=True, text=True, timeout=10)
+        #**_HIDE_CONSOLE_KWARGS suppresses the flashing console window
+        #this command would otherwise pop open on Windows (see that
+        #constant's own comment above).
+        result = subprocess.run(command, capture_output=True, text=True, timeout=10, **_HIDE_CONSOLE_KWARGS)
         #Return just the text that was printed to standard output.
         return result.stdout
     #If the command is missing or errors out, do not crash the caller.

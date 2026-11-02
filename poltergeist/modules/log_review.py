@@ -58,6 +58,17 @@ import glob
 #Store whether we are on Windows once for the whole module to reuse.
 IS_WINDOWS = platform.system() == "Windows"
 
+#Windows-only fix for a real bug report: read_windows_eventlog_tail()
+#below shells out to "wevtutil" on every single scan (this module is a
+#registered LIVE_MODULE) - without this, that's a visible console window
+#flashing open and closed once per scan. See modules/users.py's own copy
+#of this exact fix for the full explanation; the short version is
+#CREATE_NO_WINDOW tells Windows not to allocate a console for the child
+#process at all, and the ternary keeps this safe to import on Linux too
+#(where it's never actually needed, since journalctl - the Linux
+#equivalent just below - never pops a console window in the first place).
+_HIDE_CONSOLE_KWARGS = {"creationflags": subprocess.CREATE_NO_WINDOW} if IS_WINDOWS else {}
+
 #The two SSH-specific auth log paths, kept as their own named constant
 #since they are what "the" auth log actually is on the two main Linux
 #families (Debian/Ubuntu use auth.log, RHEL/CentOS/Fedora use secure) -
@@ -422,9 +433,13 @@ def read_windows_eventlog_tail(log_name, max_events=MAX_WINDOWS_EVENTS):
     try:
         #"/rd:true" reads newest-first, so "/c:<N>" naturally caps to
         #the N MOST RECENT events rather than the N oldest ones.
+        #**_HIDE_CONSOLE_KWARGS suppresses the flashing console window
+        #this would otherwise pop open on Windows (see that constant's
+        #own comment above).
         result = subprocess.run(
             ["wevtutil", "qe", log_name, f"/c:{max_events}", "/rd:true", "/f:text"],
             capture_output=True, text=True, errors="replace", timeout=30,
+            **_HIDE_CONSOLE_KWARGS,
         )
         if result.returncode != 0:
             return ""

@@ -72,6 +72,22 @@ from ..evidence import sha256_of, resolve_stale
 #platform.system() more than one time.
 IS_WINDOWS = platform.system() == "Windows"
 
+#Windows-only fix for a real bug report: a console-subsystem command like
+#"schtasks"/"reg query"/"powershell" launched via subprocess.run() from a
+#windowed/GUI process (no console of its own attached) makes Windows pop
+#open a brand-new, briefly visible console window for that one command,
+#then close it the instant it exits - and since both this module's STATE
+#collect() (run every scan via exorcise.py's diff) AND its LIVE check()
+#(a registered LIVE_MODULE, also run every scan) call this repeatedly,
+#that adds up to a steady flicker of windows opening and closing, exactly
+#as often as the ambient auto-scan ticks. CREATE_NO_WINDOW tells Windows
+#not to allocate one at all. The ternary means subprocess.CREATE_NO_WINDOW
+#(a Windows-only attribute - it doesn't exist in the subprocess module on
+#Linux) is only ever actually read when IS_WINDOWS is True, so this stays
+#safe to import on Linux too. See modules/users.py's own copy of this
+#same fix for where the pattern first came from.
+_HIDE_CONSOLE_KWARGS = {"creationflags": subprocess.CREATE_NO_WINDOW} if IS_WINDOWS else {}
+
 
 #Define run_command, a tiny helper identical in spirit to the one in
 #discovery.py, kept local here so this module has no import cycle back
@@ -80,7 +96,14 @@ def run_command(command):
     #Try to run the command and capture its output as text.
     try:
         #Give the command 15 seconds before giving up on it.
-        result = subprocess.run(command, capture_output=True, text=True, timeout=15, shell=isinstance(command, str))
+        #**_HIDE_CONSOLE_KWARGS suppresses the flashing console window
+        #this would otherwise pop open on Windows (see that constant's
+        #own comment above) - this is the single most-called run_command
+        #in the whole project (schtasks/reg query/powershell, on every
+        #single scan), so it's also the single biggest source of the
+        #flicker this fix addresses.
+        result = subprocess.run(command, capture_output=True, text=True, timeout=15,
+                                 shell=isinstance(command, str), **_HIDE_CONSOLE_KWARGS)
         #Return just the text that was printed to standard output.
         return result.stdout
     #If the command is missing or errors out, do not crash the scan.

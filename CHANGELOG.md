@@ -1,6 +1,35 @@
 # Changelog
 
 ## [Unreleased]
+### Fixed — a flood of flashing console/PowerShell windows on Windows during every scan
+Real bug report: on a local Windows target, a console or PowerShell
+window kept popping open and closing, repeatedly, while the GUI's
+ambient auto-scan ran. Root cause: `subprocess.run()`, called from a
+windowed/GUI process with no console of its own, makes Windows allocate
+a brand-new, briefly-visible console window for each child process it
+spawns, unless told not to. `modules/users.py` and `modules/deception.py`
+already had the fix for this (`CREATE_NO_WINDOW`) from an earlier bug
+report, but it was never propagated to the rest of the project - and the
+worst offenders turned out to be exactly the modules that run on *every
+single scan pass*: `modules/persistence.py` (the single most-called
+`run_command` in the project - `schtasks`, `reg query` per registry key,
+and a `powershell` call for services, all re-run every scan by both its
+STATE `collect()`, invoked every scan via `exorcise.py`'s diff, and its
+own separate LIVE `check()`), `modules/packages.py` (another real
+`powershell` process, also STATE, also every scan), `modules/
+logging_health.py` (`sc query eventlog`, a registered LIVE module), and
+`modules/log_review.py` (`wevtutil`, also LIVE). Applied the same fix
+(`CREATE_NO_WINDOW` via a `_HIDE_CONSOLE_KWARGS` dict, Windows-only,
+empty/inert on Linux) everywhere it was missing - those four, plus
+`discovery.py` (the wizard's own probing), `modules/snapshot.py`
+(Medium's snapshot/revert), and `modules/lockdown.py` (Shield's firewall
+rules) for full consistency, even though those three aren't part of the
+ambient loop and so weren't the main source of the flood. Verified
+`_HIDE_CONSOLE_KWARGS` is an empty, no-op dict on this Linux dev
+environment (there is no Windows box to reproduce the actual flashing on
+directly) and re-ran every existing regression test that exercises these
+`run_command()` helpers - all still pass.
+
 ### Added — v1.0: hard elevation requirement, a packaged Windows `.exe`, and a Linux desktop shortcut
 Bumped to v1.0 and added a real author/copyright/URL
 (`(c) 2026 Josh Holder`, `github.com/holder77`), defined once in

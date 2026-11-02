@@ -28,6 +28,16 @@ import subprocess
 #Store whether we are on Windows once for the whole module to reuse.
 IS_WINDOWS = platform.system() == "Windows"
 
+#Windows-only fix for a real bug report: check_logging_service() below
+#shells out to "sc query eventlog" on every single scan (this module is
+#a registered LIVE_MODULE) - without this, that's a visible console
+#window flashing open and closed once per scan. See modules/users.py's
+#own copy of this exact fix for the full explanation; the short version
+#is CREATE_NO_WINDOW tells Windows not to allocate a console for the
+#child process at all, and the ternary keeps this safe to import on
+#Linux too.
+_HIDE_CONSOLE_KWARGS = {"creationflags": subprocess.CREATE_NO_WINDOW} if IS_WINDOWS else {}
+
 #List the log files worth watching for a sudden size decrease. These are
 #the most commonly cleared logs on each OS; the user can add more to
 #their own copy by editing this list.
@@ -48,7 +58,10 @@ def run_command(command):
     #Try to run the command and capture its output.
     try:
         #Give the command 10 seconds before giving up.
-        result = subprocess.run(command, capture_output=True, text=True, timeout=10)
+        #**_HIDE_CONSOLE_KWARGS suppresses the flashing console window
+        #this would otherwise pop open on Windows (see that constant's
+        #own comment above).
+        result = subprocess.run(command, capture_output=True, text=True, timeout=10, **_HIDE_CONSOLE_KWARGS)
         #Return the output text and whether the command itself succeeded.
         return result.stdout, result.returncode == 0
     #If the command fails or is missing, do not crash the scan.

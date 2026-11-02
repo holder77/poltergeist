@@ -19,6 +19,19 @@ from ..evidence import sha256_of
 #Store whether we are on Windows once for the whole module to reuse.
 IS_WINDOWS = platform.system() == "Windows"
 
+#Windows-only fix for a real bug report: a console-subsystem command like
+#"net user" launched via subprocess.run() from a windowed/GUI process (no
+#console of its own attached) makes Windows pop open a brand-new, briefly
+#visible console window for that one command, then close it the instant
+#it exits - and since the GUI's own ambient auto-scan re-runs every live
+#check on a timer, that adds up to a steady flicker of console windows
+#opening and closing. CREATE_NO_WINDOW tells Windows not to allocate one
+#at all. The ternary means subprocess.CREATE_NO_WINDOW (a Windows-only
+#attribute - it doesn't exist in the subprocess module on Linux) is only
+#ever actually read when IS_WINDOWS is True, so this stays safe to
+#import on Linux too.
+_HIDE_CONSOLE_KWARGS = {"creationflags": subprocess.CREATE_NO_WINDOW} if IS_WINDOWS else {}
+
 
 #Define run_command as a small local wrapper, matching the pattern used in
 #the other modules, so this file has no dependency on anything outside
@@ -26,8 +39,10 @@ IS_WINDOWS = platform.system() == "Windows"
 def run_command(command):
     #Try to run the command and capture its text output.
     try:
-        #Give the command 15 seconds before giving up.
-        result = subprocess.run(command, capture_output=True, text=True, timeout=15)
+        #Give the command 15 seconds before giving up. **_HIDE_CONSOLE_KWARGS
+        #suppresses the flashing console window this command would
+        #otherwise pop open on Windows (see that constant's own comment).
+        result = subprocess.run(command, capture_output=True, text=True, timeout=15, **_HIDE_CONSOLE_KWARGS)
         #Return the standard output text.
         return result.stdout
     #If the command fails or is missing, do not crash the scan.

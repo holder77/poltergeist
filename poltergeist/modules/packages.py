@@ -20,6 +20,16 @@ import subprocess
 #Store whether we are on Windows once for the whole module to reuse.
 IS_WINDOWS = platform.system() == "Windows"
 
+#Windows-only fix for a real bug report: collect_windows() below shells
+#out to a real "powershell" process on every single scan (packages.py is
+#a STATE module, re-collected every scan by exorcise.py's diff, same as
+#persistence.py) - without this, that's a visible PowerShell window
+#flashing open and closed once per scan. See modules/users.py's own copy
+#of this exact fix for the full explanation; the short version is
+#CREATE_NO_WINDOW tells Windows not to allocate a console for the child
+#process at all, and the ternary keeps this safe to import on Linux too.
+_HIDE_CONSOLE_KWARGS = {"creationflags": subprocess.CREATE_NO_WINDOW} if IS_WINDOWS else {}
+
 
 #Define run_command, the same small wrapper pattern used in every other
 #module, kept local so this module stays a self-contained, copy-pasteable
@@ -27,8 +37,11 @@ IS_WINDOWS = platform.system() == "Windows"
 def run_command(command):
     #Try to run the command and capture its text output.
     try:
-        #Give the command up to 30 seconds; a full package list can be slow.
-        result = subprocess.run(command, capture_output=True, text=True, timeout=30, shell=isinstance(command, str))
+        #Give the command up to 30 seconds; a full package list can be
+        #slow. **_HIDE_CONSOLE_KWARGS suppresses the flashing PowerShell
+        #window this would otherwise pop open on Windows.
+        result = subprocess.run(command, capture_output=True, text=True, timeout=30,
+                                 shell=isinstance(command, str), **_HIDE_CONSOLE_KWARGS)
         #Return just the text that was printed to standard output.
         return result.stdout
     #If the command is missing or errors out, do not crash the whole scan.
