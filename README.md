@@ -20,7 +20,7 @@ which the tool prints and a human decides whether to run. Nothing in
 Poltergeist kills a process, deletes a file, or runs a suggested command
 by itself.
 
-It launches as a **strict black-and-white gothic desktop GUI** by
+It launches as a **strict black-and-white desktop GUI** by
 default — click through the setup wizard instead of typing at prompts,
 press a button instead of remembering a menu number, hover anything for
 a plain-English explainer, and watch the one window keep itself
