@@ -54,7 +54,7 @@ from ..discovery import discover
 #import the config functions so this wizard saves settings exactly the
 #way the rest of the project expects them to be saved, plus REPO_ROOT,
 #which a remote target's deploy step needs to know what to copy there.
-from ..config import default_config, save_config, REPO_ROOT
+from ..config import default_config, save_config, REPO_ROOT, DEPLOYABLE_SOURCE_ROOT
 
 #import the role profile helpers so this wizard can offer the same
 #"what kind of machine is this" choices the text menu offers. Suggested
@@ -671,9 +671,16 @@ class WizardFrame(ttk.Frame):
             #probe_scratch_config. The REAL evidence_dir question comes
             #on the very next page, local or remote alike.
             probe_scratch_config = {"evidence_dir": self.previous_config.get("evidence_dir") or default_config()["evidence_dir"]}
-            #Actually attempt deploy + remote probe.
+            #Actually attempt deploy + remote probe. DEPLOYABLE_SOURCE_ROOT,
+            #not REPO_ROOT - the two are identical for a plain "python
+            #poltergeist.py" checkout, but REPO_ROOT alone would point
+            #nowhere useful when this is the packaged .exe (see config.py's
+            #own long comment on DEPLOYABLE_SOURCE_ROOT: deploy needs real,
+            #plain-text .py source to copy up to the - almost always Linux -
+            #target, never just whatever folder a copied-anywhere single
+            #.exe file happens to be sitting in).
             discovered, error = remote.probe_target_remote(
-                probe_scratch_config, self._pending_remote_target, self._pending_remote_secret, REPO_ROOT,
+                probe_scratch_config, self._pending_remote_target, self._pending_remote_secret, DEPLOYABLE_SOURCE_ROOT,
             )
             #Hand the result back through the shared dict.
             self._probe_result["discovered"] = discovered

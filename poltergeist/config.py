@@ -10,6 +10,14 @@
 #and Linux without hardcoding slashes or backslashes.
 import os
 
+#import sys so this file can tell whether it is running from a plain
+#source checkout (python poltergeist.py) or from the packaged Windows
+#.exe (see REPO_ROOT and DEPLOYABLE_SOURCE_ROOT just below for why that
+#distinction matters) - sys.frozen and sys._MEIPASS are PyInstaller's own
+#documented attributes for exactly this check, and sys.executable is the
+#one path a frozen build can always trust.
+import sys
+
 #import the json module because the config file is stored as plain, human
 #readable JSON so a teammate can open and hand-edit it if needed.
 import json
@@ -27,12 +35,68 @@ import psutil
 
 #Build the absolute path to the folder this file lives in, so the config
 #file is always found next to the code no matter where the tool is launched
-#from (a teammate's Desktop, a USB stick, wherever).
+#from (a teammate's Desktop, a USB stick, wherever) - THIS IS ONLY
+#TRUSTWORTHY for a plain "python poltergeist.py" source checkout. A
+#packaged Windows .exe (see packaging/windows/) runs every module out of
+#PyInstaller's own in-memory/temp-extraction bundle instead of real files
+#on disk, so __file__ here can point somewhere that is not a real,
+#persistent folder at all once frozen - REPO_ROOT below corrects for that.
 PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+#Whether this process is the packaged .exe rather than a plain source
+#checkout. getattr(..., False) rather than a bare sys.frozen because this
+#attribute does not exist at all on a normal, non-frozen interpreter -
+#PyInstaller's bootloader is what adds it.
+IS_FROZEN = bool(getattr(sys, "frozen", False))
+
 #Go one directory up from poltergeist/ to the repo root, which is where we
-#want poltergeist_config.json and the evidence/ folder to actually live.
-REPO_ROOT = os.path.dirname(PACKAGE_DIR)
+#want poltergeist_config.json and the evidence/ folder to actually live -
+#UNLESS this is the packaged .exe, which the README deliberately tells
+#people to "copy that one file anywhere you like" (see
+#packaging/windows/build_exe.bat's own closing message). Once copied
+#somewhere, PACKAGE_DIR's __file__-based math above no longer points at
+#any real, writable folder the user can see - it points inside
+#PyInstaller's own private bundle. The one path a frozen build can always
+#trust is sys.executable: the actual .exe file's own location, which is
+#exactly where a portable, double-clicked program's config/evidence
+#belongs anyway (right next to the program itself, so moving the .exe
+#takes its settings and evidence along with it).
+REPO_ROOT = os.path.dirname(os.path.abspath(sys.executable)) if IS_FROZEN else os.path.dirname(PACKAGE_DIR)
+
+#Define DEPLOYABLE_SOURCE_ROOT: the folder a REMOTE-target deploy should
+#actually copy from (see modules/remote.py's deploy_to_target()). For a
+#plain source checkout this is just REPO_ROOT - the same folder holding
+#poltergeist.py and the poltergeist/ package tree already is the real,
+#plain-text source a remote Linux target needs a copy of to run itself.
+#
+#The packaged .exe cannot use REPO_ROOT for this, even with the fix just
+#above: REPO_ROOT for a frozen build now correctly points at wherever the
+#user copied Poltergeist.exe to (fixing where ITS OWN config/evidence
+#live), but there is usually no real poltergeist.py/poltergeist/ source
+#tree sitting next to a copied single .exe file at all - that is the
+#whole point of "copy that one file anywhere you like". Remote deploy
+#still needs genuine, plain-text .py source to hand to the target's own
+#python3 though (the target is almost always Linux, and an .exe obviously
+#cannot run there), which is exactly why poltergeist.spec bundles a full,
+#plain-text copy of that source INSIDE the .exe itself, under a
+#"_deploy_source" folder (see that file's _collect_deploy_source_datas()
+#for how it is built, kept automatically in sync with
+#modules/remote.py's own deploy exclusion rules). sys._MEIPASS is
+#PyInstaller's own documented attribute for where this one run's bundle
+#was actually extracted to.
+if IS_FROZEN:
+    #Where the bundled, plain-text deploy source should be, if this build
+    #actually included it (see poltergeist.spec).
+    _bundled_deploy_source = os.path.join(getattr(sys, "_MEIPASS", ""), "_deploy_source")
+    #Use the bundled copy if it is really there; an older or hand-built
+    #.exe missing it falls back to REPO_ROOT (the .exe's own folder) -
+    #strictly less likely to work than crashing outright would be wrong,
+    #but it is still the best guess available without it.
+    DEPLOYABLE_SOURCE_ROOT = _bundled_deploy_source if os.path.isdir(_bundled_deploy_source) else REPO_ROOT
+else:
+    #The normal case: a plain source checkout, where REPO_ROOT already is
+    #exactly the folder a remote deploy needs to copy.
+    DEPLOYABLE_SOURCE_ROOT = REPO_ROOT
 
 #Define _MAX_INSTANCES, a sane upper bound on how many simultaneously
 #running instances this file will ever look for a free slot among, purely

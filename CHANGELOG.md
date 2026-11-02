@@ -30,6 +30,47 @@ environment (there is no Windows box to reproduce the actual flashing on
 directly) and re-ran every existing regression test that exercises these
 `run_command()` helpers - all still pass.
 
+### Fixed — setting up a remote (SSH) target failed with "poltergeist.py: No such file or directory", when run from the packaged `.exe`
+Real bug report: the Setup wizard's remote-machine page connected fine
+(auth, deploy, and the remote config push all reported success) but then
+failed with the target's own `python3` unable to find `poltergeist.py`
+in the folder it had just deployed into. Root cause: both wizards (text
+and GUI) told `remote.probe_target_remote()` to deploy from `REPO_ROOT` -
+the folder containing `poltergeist.py` and the `poltergeist/` package in
+a plain source checkout. That is the wrong folder once this is the
+packaged Windows `.exe` added earlier in this same release: the README
+deliberately says to copy that one `.exe` file anywhere, so there is
+usually no real source tree sitting next to it at all, and even the
+`.exe`'s own notion of "where am I" (`__file__`-based, under
+PyInstaller) does not reliably point anywhere a real file lives. Deploy
+would quietly walk whatever near-empty folder the `.exe` happened to be
+sitting in, "succeed" having copied little or nothing useful, and only
+fail three steps later when the remote side tried to actually run
+something that was never copied.
+
+Fixed with two changes. First, `config.py` now tells `REPO_ROOT` and a
+new `DEPLOYABLE_SOURCE_ROOT` apart: `REPO_ROOT` (used for this machine's
+own `poltergeist_config.json`/`evidence/`) now correctly resolves to the
+`.exe`'s own folder when frozen (`sys.executable`), instead of the
+unreliable `__file__` math - a smaller, related fix, since local
+settings/evidence were at risk of landing somewhere equally wrong.
+Second, and the actual fix for this bug: `poltergeist.spec` now bundles
+a full, plain-text copy of `poltergeist.py` and the entire
+`poltergeist/` package *inside* the `.exe` itself, under a
+`_deploy_source` folder, built by walking the repo with the exact same
+exclusion rule `deploy_to_target()` itself already uses
+(`_is_excluded_from_deploy`, imported directly into the spec file so the
+two can never drift apart). `DEPLOYABLE_SOURCE_ROOT` reads that bundled
+copy back out via PyInstaller's own `sys._MEIPASS` when it is present,
+falling back to `REPO_ROOT` only if an older/hand-built `.exe` is
+missing it. Both `cli.py`'s text wizard and `gui/wizard.py`'s GUI wizard
+now pass `DEPLOYABLE_SOURCE_ROOT` instead of `REPO_ROOT` into
+`probe_target_remote()`. A plain `python poltergeist.py` run is
+completely unaffected - `DEPLOYABLE_SOURCE_ROOT` is just `REPO_ROOT`
+again in that case, verified directly. Re-ran the full existing remote
+test suite (`fake_paramiko_test.py`, `fake_tk_wizard_test.py`) and the
+full GUI regression suite - all still pass.
+
 ### Added — v1.0: hard elevation requirement, a packaged Windows `.exe`, and a Linux desktop shortcut
 Bumped to v1.0 and added a real author/copyright/URL
 (`(c) 2026 Josh Holder`, `github.com/holder77`), defined once in

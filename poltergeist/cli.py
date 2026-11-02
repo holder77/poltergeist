@@ -42,7 +42,7 @@ import json
 #DASHBOARD_PORT is THIS instance's own web Dashboard port (8765 for the
 #first running instance, 8766 for a second simultaneous one, and so on -
 #see config.py's own _select_instance_paths() for the full reasoning).
-from .config import load_config, save_config, default_config, config_exists, REPO_ROOT, DASHBOARD_PORT
+from .config import load_config, save_config, default_config, config_exists, REPO_ROOT, DEPLOYABLE_SOURCE_ROOT, DASHBOARD_PORT
 
 #import discover from discovery.py so the wizard can suggest real values
 #for a LOCAL target instead of asking the user to type raw IPs and ports
@@ -414,7 +414,14 @@ def run_wizard(previous_config=None):
         #cache this host's trusted key during setup - the real evidence_dir
         #question comes right after this either way, local or remote.
         probe_scratch_config = {"evidence_dir": previous_config.get("evidence_dir") or default_config()["evidence_dir"]}
-        discovered, error = remote.probe_target_remote(probe_scratch_config, target, secret, REPO_ROOT)
+        #DEPLOYABLE_SOURCE_ROOT, not REPO_ROOT - the two are the same
+        #folder for a plain "python poltergeist.py" checkout, but REPO_ROOT
+        #alone would be wrong here when this is the packaged .exe (see
+        #config.py's own long comment on DEPLOYABLE_SOURCE_ROOT for the
+        #full story: deploy needs real, plain-text .py source to copy up
+        #to the - almost always Linux - target, and that is never just
+        #sitting next to a copied-anywhere single .exe file).
+        discovered, error = remote.probe_target_remote(probe_scratch_config, target, secret, DEPLOYABLE_SOURCE_ROOT)
         #A key that needs a passphrase we did not supply is a specific,
         #recoverable case - ask for one and retry once instead of just
         #failing the whole wizard over a detail we can still fix right now.
@@ -424,7 +431,9 @@ def run_wizard(previous_config=None):
             if typed_passphrase:
                 #Record it and try the whole connect-and-probe step again.
                 secret["passphrase"] = typed_passphrase
-                discovered, error = remote.probe_target_remote(probe_scratch_config, target, secret, REPO_ROOT)
+                #Same DEPLOYABLE_SOURCE_ROOT as the first attempt just
+                #above, for the same reason.
+                discovered, error = remote.probe_target_remote(probe_scratch_config, target, secret, DEPLOYABLE_SOURCE_ROOT)
         #If it still did not work, stop the wizard here rather than ask a
         #dozen more questions about a machine we cannot actually reach.
         if discovered is None:
