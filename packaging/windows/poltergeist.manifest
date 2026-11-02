@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+DESCRIPTION: This is the piece that actually makes "right-click ->
+Run as administrator" work the way Windows itself understands it -
+embedded into Poltergeist.exe by PyInstaller (see poltergeist.spec's own
+manifest= argument), this tells Windows itself, at the operating-system
+level, that this program requires elevation. In practice that means
+Windows shows its own native UAC consent prompt AUTOMATICALLY the moment
+the .exe is launched any way at all - a plain double-click included, not
+only an explicit right-click -> "Run as administrator" - and simply
+refuses to start the program at all until that's accepted. This is the
+real, OS-native mechanism; the program's own Python-level elevation
+check (cli.py's enforce_elevation_or_exit(), which shows the "needs to
+run elevated" popup and closes) is a second, independent safety net for
+every OTHER way this project can be launched - the raw poltergeist.py
+script, python3 -m poltergeist, Linux (which has no equivalent manifest
+mechanism at all) - and, for the .exe itself, only matters if UAC was
+somehow bypassed, since a cancelled/denied UAC prompt stops the program
+from ever starting in the first place.
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity version="1.0.0.0" processorArchitecture="*" name="Poltergeist.App" type="win32"/>
+  <description>Poltergeist - blue team audit tool (never kills a process, never deletes evidence)</description>
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <!-- requireAdministrator (not highestAvailable) is deliberate:
+             highestAvailable would silently run UN-elevated for a
+             standard user account with no admin rights at all, which is
+             exactly the "runs, but sees almost nothing" failure mode
+             this whole feature exists to prevent. requireAdministrator
+             instead shows a clear UAC prompt and, for a true standard
+             user with no admin credentials available at all, fails to
+             launch with a plain "this app can't run" message rather
+             than quietly starting half-blind. -->
+        <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+  <!-- Declares Windows 7 through 11 as compatible - without this block,
+       some Windows versions apply compatibility shims (virtualized file/
+       registry access, etc) that would quietly get in the way of a tool
+       whose entire job is reading the REAL system state accurately. -->
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/> <!-- Windows 10 / 11 -->
+      <supportedOS Id="{1f676c76-80e1-4239-95bb-83d0f6d0da78}"/> <!-- Windows 8.1 -->
+      <supportedOS Id="{4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38}"/> <!-- Windows 8 -->
+      <supportedOS Id="{35138b9a-5d96-4fbd-8e2d-a2440225f93a}"/> <!-- Windows 7 -->
+    </application>
+  </compatibility>
+</assembly>

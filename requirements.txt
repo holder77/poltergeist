@@ -1,0 +1,13 @@
+#The two hard dependencies. psutil gives one cross-platform API for
+#processes, connections, and network interfaces on both Windows and Linux.
+psutil>=5.9
+
+#paramiko is a pure-Python SSH client - no system ssh/scp/rsync binaries
+#required, which matters on Windows where an OpenSSH client is not always
+#installed. It is what lets the setup wizard reach a remote machine over
+#SSH using a key, a specific key file, OR a username/password, all through
+#one consistent connection path instead of three different ones. A
+#password or key passphrase typed into the wizard is handed straight to
+#paramiko in memory for that connection only - Poltergeist itself never
+#writes a secret to config.json, a log file, or anywhere else on disk.
+paramiko>=3.4

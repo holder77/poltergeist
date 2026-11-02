@@ -1,0 +1,10 @@
+{
+  "_readme": "This is a tiny STARTER file, not a live feed. Poltergeist is meant to work on an air-gapped competition network, so it cannot call out to the NVD API during the event. Before a competition, refresh this file from a source like https://nvd.nist.gov/vuln/data-feeds or your own notes, and add entries for the exact software versions you expect to see. Each entry matches when its 'contains' text is found inside a service banner.",
+  "entries": [
+    {"service": "ssh", "contains": "OpenSSH_7.2", "note": "OpenSSH 7.2 era - check for CVE-2016-10009/10010/10011/10012 (various local/agent issues); confirm against your exact patch level"},
+    {"service": "ftp", "contains": "vsFTPd 2.3.4", "note": "This exact banner is the well-known vsftpd 2.3.4 backdoor (CVE-2011-2523) - treat as compromised, do not trust this service"},
+    {"service": "http", "contains": "Apache/2.4.49", "note": "Apache 2.4.49 - check for CVE-2021-41773 path traversal/RCE; patch to 2.4.51+"},
+    {"service": "http", "contains": "Apache/2.2", "note": "Apache 2.2.x is end-of-life - no further security patches, flag as a weakness regardless of a specific CVE"},
+    {"service": "smtp", "contains": "Exim 4.87", "note": "Exim 4.87-4.91 era - check for CVE-2019-10149 remote command execution"}
+  ]
+}

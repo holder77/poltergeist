@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "poltergeist"
+version = "1.0"
+description = "Modular cross-platform blue team audit tool"
+authors = [
+    { name = "Josh Holder" },
+]
+urls = { Homepage = "https://github.com/holder77" }
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "psutil>=5.9",
+    "paramiko>=3.4",
+]
+
+[project.scripts]
+# This line is what makes "poltergeist" work as a direct terminal command
+# after "pip install -e .", instead of always typing "python3 poltergeist.py".
+poltergeist = "poltergeist.cli:main"
+
+[tool.setuptools]
+# "poltergeist.gui" was missing here - harmless for "pip install -e ."
+# (editable installs just point at the source tree as-is) but a REAL,
+# non-editable "pip install ." would have silently shipped a package
+# with no gui/ subpackage at all, breaking the default GUI launch the
+# moment it was installed anywhere else. Caught while repackaging for
+# this round of changes.
+packages = ["poltergeist", "poltergeist.modules", "poltergeist.gui"]
+
+[tool.setuptools.package-data]
+# poltergeist/data/cve_hints.json (read by modules/oracle.py) is plain
+# data, not code - setuptools does not bundle it automatically just
+# because it lives inside a listed package.
+poltergeist = ["data/*.json"]
